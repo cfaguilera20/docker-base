@@ -1,0 +1,114 @@
+version: "3.1"
+
+##
+# Volumes
+##
+volumes:
+    jenkins_home:
+
+##
+# Services
+##
+services:
+    ##
+    # Autodiscovery : Consul
+    ##
+    autodiscovery:
+        build: ./autodiscovery/
+        deploy:
+            resources:
+                limits:
+                    cpus: '0.001'
+                    memory: 128M
+                reservations:
+                    cpus: '0.0001'
+                    memory: 20M
+        expose:
+            - 53
+            - 8300
+            - 8301
+            - 8302
+            - 8400
+            - 8500
+        ports:
+            - 8500:8500
+        dns:
+            - 127.0.0.1
+    
+    ##
+    # Jenkins
+    ##
+    jenkins:
+        build: ./jenkins/
+        container_name: jenkins
+        volumes:
+            - ../volumes/jenkins_home:/var/jenkins_home
+        ports:
+            - 8080:8080
+            - 50000:50000
+
+    # Base Microservice: fpm, nginx, source
+    ##
+    microservice_base_fpm:
+        container_name: microservice-base-fpm
+        build: ./microservices/base/php-fpm/
+        volumes:
+           - ../source/base:/var/www/html
+        links:
+            - autodiscovery
+            - microservice_base_database
+        expose:
+            - 9000
+        environment:
+            - SERVICE=microservice-base-fpm
+            - BACKEND=microservice-base-nginx
+            - CONSUL=autodiscovery
+
+    microservice_base_database:
+        build: ./microservices/base/database/
+        container_name: microservice-base-database
+        environment:
+            - CONSUL=autodiscovery
+            - MYSQL_ROOT_PASSWORD=secret
+            - MYSQL_DATABASE=homestead
+            - MYSQL_USER=homestead
+            - MYSQL_PASSWORD=secret
+        ports:
+            - 6667:3306
+    
+    microservice_base_nginx:
+        container_name: microservice-base-nginx
+        build: ./microservices/base/nginx/
+        volumes:
+           - ../source/base:/var/www/html
+        links:
+            - autodiscovery
+            - microservice_base_fpm
+        depends_on: 
+            - microservice_base_fpm
+            - microservice_base_database
+        environment:
+            - SERVICE=microservice-base-nginx
+            - BACKEND=microservice-base-fpm
+            - CONSUL=autodiscovery
+        ports:
+            - 8081:80
+            - 9091:9090
+    
+    source_base: 
+        image: nginx:stable
+        volumes:
+           - ../source/base:/var/www/html
+        command: "true"
+        
+    ##
+    # Telemetry: prometheus
+    ##
+    telemetry:
+        build: ./telemetry/
+        links:
+            - autodiscovery
+        expose:
+            - 9090
+        ports:
+            - 9090:9090
