@@ -34,18 +34,6 @@ services:
             - 8500:8500
         dns:
             - 127.0.0.1
-    
-    ##
-    # Jenkins
-    ##
-    jenkins:
-        build: ./jenkins/
-        container_name: jenkins
-        volumes:
-            - ../volumes/jenkins_home:/var/jenkins_home
-        ports:
-            - 8080:8080
-            - 50000:50000
 
     # Base Microservice: fpm, nginx, source
     ##
